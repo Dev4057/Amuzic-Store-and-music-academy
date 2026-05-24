@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-heading: 'Cormorant Garamond';
+  --font-body: 'DM Sans';
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-body text-ink bg-cream;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading;
+  }
+}
+
+@layer components {
+  /* Burgundy fill — primary CTA */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 bg-burgundy text-cream font-body font-medium
+           text-sm px-6 py-3 rounded hover:bg-burgundy-dark transition-all duration-200
+           focus:outline-none tracking-wide;
+  }
+
+  /* Alias kept for backward compat — same as primary */
+  .btn-teal {
+    @apply inline-flex items-center gap-2 bg-burgundy text-cream font-body font-medium
+           text-sm px-6 py-3 rounded hover:bg-burgundy-dark transition-all duration-200
+           focus:outline-none tracking-wide;
+  }
+
+  /* Gold fill — for use on dark/burgundy backgrounds */
+  .btn-gold {
+    @apply inline-flex items-center gap-2 bg-gold text-ink font-body font-semibold
+           text-sm px-6 py-3 rounded hover:bg-gold-dark transition-all duration-200
+           focus:outline-none tracking-wide;
+  }
+
+  /* Dark outline — for use on cream backgrounds */
+  .btn-outline {
+    @apply inline-flex items-center gap-2 border border-ink/20 text-ink font-body
+           font-medium text-sm px-6 py-3 rounded hover:border-ink hover:bg-ink
+           hover:text-cream transition-all duration-200 focus:outline-none tracking-wide;
+  }
+
+  /* Cream outline — for use on dark/burgundy backgrounds */
+  .btn-outline-cream {
+    @apply inline-flex items-center gap-2 border border-cream/30 text-cream font-body
+           font-medium text-sm px-6 py-3 rounded hover:bg-cream/10 transition-all
+           duration-200 focus:outline-none tracking-wide;
+  }
+
+  /* Section eyebrow label */
+  .section-label {
+    @apply text-xs font-body font-medium tracking-[0.2em] uppercase text-burgundy;
+  }
+
+  /* Section heading */
+  .section-title {
+    @apply font-heading text-4xl md:text-5xl font-semibold text-ink leading-tight;
+  }
+
+  /* Section supporting text */
+  .section-subtitle {
+    @apply font-body text-base text-ink/55 mt-3 leading-relaxed;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-white border border-ink/10 rounded-sm overflow-hidden;
+  }
+
+  /* Form input */
+  .input-field {
+    @apply w-full bg-white border border-ink/15 rounded px-4 py-3 font-body text-sm
+           text-ink placeholder-ink/30 focus:outline-none focus:border-burgundy
+           transition-colors duration-200;
+  }
+}

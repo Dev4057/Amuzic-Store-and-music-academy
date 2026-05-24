@@ -1,0 +1,31 @@
+{
+  "name": "admin",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "type-check": "tsc --noEmit",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@amuzic/db": "workspace:*",
+    "@amuzic/shared": "workspace:*",
+    "@hookform/resolvers": "^5.4.0",
+    "@supabase/supabase-js": "2.43.1",
+    "@tanstack/react-query": "^5.80.2",
+    "date-fns": "^4.1.0",
+    "next": "^14.2.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.76.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.4.5"
+  }
+}

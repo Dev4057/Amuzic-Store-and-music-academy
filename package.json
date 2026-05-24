@@ -1,0 +1,23 @@
+{
+  "name": "amuzic-academy",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "type-check": "turbo type-check",
+    "lint": "turbo lint",
+    "dev:api": "turbo dev --filter=@amuzic/api",
+    "dev:web": "turbo dev --filter=web",
+    "dev:admin": "turbo dev --filter=admin"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
