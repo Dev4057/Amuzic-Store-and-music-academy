@@ -1,6 +1,6 @@
 # Amuzic Store & Music Academy
 
-A full-stack monorepo for managing the Amuzic music academy — student enrolment, batches, attendance, fees, demo bookings, and a public-facing storefront.
+A full-stack monorepo for Amuzic Store & Music Academy (Bavdhan, Pune) — student enrolment, batches, attendance, fees, financials, demo bookings, blog, testimonials, and a public-facing website with a student/teacher portal.
 
 ---
 
@@ -17,7 +17,7 @@ amuzic_academy/
 │   └── shared/       # Shared TypeScript types, Zod schemas, formatters
 ```
 
-Built with **pnpm workspaces** + **Turborepo**. All packages reference each other via `workspace:*` — no publishing required.
+Built with **pnpm workspaces** + **Turborepo 2**. All packages reference each other via `workspace:*` — no publishing required.
 
 ---
 
@@ -27,11 +27,11 @@ Built with **pnpm workspaces** + **Turborepo**. All packages reference each othe
 |---|---|
 | Frontend (web + admin) | Next.js 14 App Router, React 18, TypeScript |
 | API | Express.js, TypeScript, JWT auth via Supabase |
-| Database | Supabase (PostgreSQL) |
+| Database | Supabase (PostgreSQL + RLS) |
 | State management | TanStack Query v5 (admin), React hooks (web) |
 | Forms | React Hook Form v7 + Zod |
-| Styling | Custom CSS design system (web uses Tailwind) |
-| Monorepo | pnpm workspaces + Turborepo |
+| Styling | Custom CSS design system (admin) · Tailwind CSS (web) |
+| Monorepo | pnpm workspaces + Turborepo 2 |
 
 ---
 
@@ -39,7 +39,7 @@ Built with **pnpm workspaces** + **Turborepo**. All packages reference each othe
 
 - **Node.js** ≥ 18
 - **pnpm** ≥ 9 — install with `npm i -g pnpm`
-- A **Supabase** project with the schema applied (see below)
+- A **Supabase** project (free tier works) with the schema applied (see below)
 
 ---
 
@@ -52,8 +52,6 @@ pnpm install
 ```
 
 ### 2. Configure environment variables
-
-Copy the example files and fill in your Supabase credentials:
 
 **`packages/api/.env`**
 ```env
@@ -78,11 +76,14 @@ NEXT_PUBLIC_API_URL=http://localhost:4000
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_API_URL=http://localhost:4000
+REVALIDATE_SECRET=your-random-secret
 ```
+
+> **Security note:** `SUPABASE_SERVICE_ROLE_KEY` must only ever appear in the API server's `.env`. Never put it in any `NEXT_PUBLIC_*` variable.
 
 ### 3. Apply the database schema
 
-Run the migration files **in order** in your Supabase SQL editor:
+Run the migration files **in order** in **Supabase → SQL Editor**:
 
 ```
 packages/db/migrations/001_initial_schema.sql
@@ -90,13 +91,17 @@ packages/db/migrations/002_triggers.sql
 packages/db/migrations/003_rls.sql
 packages/db/migrations/004_storage.sql
 packages/db/migrations/005_seed.sql
+packages/db/migrations/006_testimonials.sql
+packages/db/migrations/007_blog.sql
+packages/db/migrations/008_student_portal_rls.sql
+packages/db/migrations/009_teacher_attendance.sql
 ```
 
-### 4. Create the first admin user
+### 4. Create the first director account
 
 1. Go to **Supabase → Authentication → Users → Add user**
-2. Enter the director's email and password
-3. Run this SQL to give them the director role:
+2. Enter the director's email and a temporary password
+3. Run this SQL to assign the director role:
 
 ```sql
 INSERT INTO profiles (id, email, full_name, role, is_active)
@@ -115,42 +120,64 @@ WHERE email = 'your-email@example.com';
 pnpm dev
 ```
 
-This starts all three services in parallel via Turborepo.
+Starts all three services in parallel via Turborepo.
 
 ### Individual services
 
 ```bash
-pnpm dev:api      # API server on http://localhost:4000
-pnpm dev:web      # Public website on http://localhost:3000
-pnpm dev:admin    # Admin console on http://localhost:3001
+pnpm dev:api      # API server  →  http://localhost:4000
+pnpm dev:web      # Public site →  http://localhost:3000
+pnpm dev:admin    # Admin panel →  http://localhost:3001
 ```
 
 ---
 
-## Admin Console
+## Admin Console (`localhost:3001`)
 
-Located at `http://localhost:3001`. Sign in with a `director` or `teacher` account.
+Sign in with a `director` or `teacher` account.
 
 ### Role-based access
 
 | Feature | Director | Teacher |
 |---|---|---|
-| Dashboard & reports | ✓ | — |
+| Dashboard & KPIs | ✓ | — |
+| Financials & trends | ✓ | — |
 | All students | ✓ | Own batch students only |
 | All batches | ✓ | Own batches only |
 | Attendance | ✓ | Own batches only |
-| Fees | ✓ | — |
+| Fees & payments | ✓ | — |
+| Reports (CSV) | ✓ | — |
 | Demo bookings | ✓ (all) | Own specialization only |
 | Teachers management | ✓ | — |
-| Products | ✓ | — |
+| Products / Store | ✓ | — |
+| Testimonials | ✓ | — |
+| Blog posts | ✓ | — |
 
 ### Creating a teacher account
 
-1. Add user in **Supabase Auth**
-2. Insert their profile with `role = 'teacher'`
-3. Create a teacher record in the **Teachers** page of the admin console
-4. Set their **specializations** (e.g., `keyboard`, `drums`, `guitar`, `vocals`) — these must match the `course_interest` values coming from demo bookings exactly (lowercase)
-5. Assign batches to them — they will then see those batches and their students
+1. Go to **Supabase → Authentication → Users → Add user**. Set a temporary password and tick **"Send email confirmation"** off.
+2. Insert their profile:
+   ```sql
+   INSERT INTO profiles (id, email, full_name, role, is_active, must_change_password)
+   SELECT id, email, 'Teacher Name', 'teacher', true, true
+   FROM auth.users WHERE email = 'teacher@example.com';
+   ```
+3. In the admin console → **Teachers** page, create a teacher record and set their **specializations** (e.g. `keyboard`, `guitar`, `drums`, `vocals`). These must match `course_interest` values from demo bookings exactly (lowercase).
+4. Assign batches to the teacher — they will see those batches and their students when they log in.
+5. On first login the teacher is forced to set a new password via the **Change Password** page before accessing the dashboard.
+
+---
+
+## Student & Teacher Portals
+
+The public `web` app also hosts two self-service portals:
+
+| Portal | URL | Purpose |
+|---|---|---|
+| Student Portal | `/portal` | View attendance, fee history, download receipts |
+| Teacher Portal | `/teacher` | View assigned batches and student attendance |
+
+Both portals use Supabase Auth directly (anon key) and are protected by RLS policies (migration `008`).
 
 ---
 
@@ -158,19 +185,97 @@ Located at `http://localhost:3001`. Sign in with a `director` or `teacher` accou
 
 | Table | Purpose |
 |---|---|
-| `profiles` | Extends Supabase auth — stores role (director/teacher/student) |
+| `profiles` | Extends Supabase auth — stores role (`director` / `teacher` / `student`) and `must_change_password` flag |
 | `courses` | Instrument courses (keyboard, guitar, drums, vocals) with fees |
-| `teachers` | Teacher records with specializations array |
-| `batches` | Class groups linked to a course and teacher, with schedule |
+| `teachers` | Teacher records with `specializations` array |
+| `batches` | Class groups linked to a course and teacher, with schedule days/time |
 | `batch_enrollments` | Many-to-many: students ↔ batches |
 | `students` | Student profiles with guardian info for child students |
-| `attendance` | Per-student per-class attendance (present/absent/late/cancelled) |
-| `fee_records` | Monthly and one-time fee records with payment tracking |
+| `attendance` | Per-student per-class attendance (`present` / `absent` / `late` / `cancelled`) |
+| `fee_records` | Monthly and one-time fee records; `month_year` (YYYY-MM) tracks billing period |
 | `progress_notes` | Teacher notes on a student's skill progress |
-| `demo_bookings` | Demo class requests from the public website |
-| `products` | Store inventory (instruments, accessories) |
+| `demo_bookings` | Demo class requests submitted from the public website |
+| `products` | Store inventory (instruments, accessories) with stock tracking |
 | `orders` | Store orders |
-| `showcase_videos` | Student performance videos for the public site |
+| `showcase_videos` | Student performance videos featured on the public site |
+| `testimonials` | Student/parent testimonials shown on the homepage |
+| `blog_posts` | Blog/insights articles published on the public site |
+
+---
+
+## API Routes
+
+All routes are prefixed with `/api`.
+
+| Prefix | Description |
+|---|---|
+| `/auth` | Login, change-password, profile |
+| `/students` | CRUD + portal-invite email |
+| `/teachers` | CRUD + specializations |
+| `/batches` | CRUD, enrol/unenrol students, attendance |
+| `/fees` | Fee records, record payment, generate monthly fees |
+| `/financials` | 6-month trend, payment-mode breakdown, top pending |
+| `/demos` | Demo bookings from the public site |
+| `/courses` | Course list and detail |
+| `/progress` | Teacher progress notes |
+| `/products` | Store product CRUD |
+| `/orders` | Store orders |
+| `/showcase` | Showcase video management |
+| `/dashboard` | Director KPI summary |
+| `/reports` | Monthly report data + CSV export |
+| `/testimonials` | Testimonial CRUD |
+| `/blog` | Blog post CRUD + slug lookup |
+
+---
+
+## Project Structure — Admin App
+
+```
+apps/admin/src/
+├── app/
+│   ├── login/              # Login page (director + teacher)
+│   ├── change-password/    # Forced first-login password reset
+│   └── (dashboard)/        # Protected layout with sidebar
+│       ├── dashboard/      # Overview KPIs (director only)
+│       ├── financials/     # 6-month revenue trends & breakdowns
+│       ├── students/       # Student list + detail (5 tabs)
+│       ├── batches/        # Batch cards + detail + attendance
+│       ├── attendance/     # Daily attendance marking
+│       ├── fees/           # Fee records + payment collection
+│       ├── reports/        # Monthly reports with CSV export
+│       ├── demos/          # Demo booking management
+│       ├── teachers/       # Teacher management (director only)
+│       ├── products/       # Store product management
+│       ├── testimonials/   # Testimonial management
+│       └── blog/           # Blog post management
+├── hooks/                  # TanStack Query hooks per domain
+├── components/             # RoleGuard, ConfirmDialog, Toast, PageHeader, etc.
+├── lib/                    # API client, query key factories
+└── providers/              # AuthProvider, QueryProvider
+```
+
+## Project Structure — Web App
+
+```
+apps/web/src/
+├── app/
+│   ├── (site)/             # Public marketing pages
+│   │   ├── page.tsx        # Homepage
+│   │   ├── courses/        # Course listing + individual course pages
+│   │   ├── about/          # About page with faculty section
+│   │   ├── contact/        # Contact page
+│   │   ├── store/          # Music store
+│   │   ├── showcase/       # Student showcase videos
+│   │   ├── insights/       # Blog / insights
+│   │   ├── why-music/      # Why learn music page
+│   │   └── book-demo/      # Demo booking form
+│   ├── portal/             # Student self-service portal
+│   └── teacher/            # Teacher portal
+├── components/
+│   ├── Navbar.tsx
+│   ├── Footer.tsx
+│   └── home/               # Homepage section components
+```
 
 ---
 
@@ -184,23 +289,15 @@ pnpm lint           # Lint all packages
 
 ---
 
-## Project Structure — Admin App
+## Faculty
 
-```
-apps/admin/src/
-├── app/
-│   ├── login/              # Login page (director + teacher)
-│   └── (dashboard)/        # Protected layout with sidebar
-│       ├── dashboard/      # Overview stats (director only)
-│       ├── students/       # Student list + detail (5 tabs)
-│       ├── batches/        # Batch cards + detail
-│       ├── attendance/     # Daily attendance marking
-│       ├── fees/           # Fee records + payment collection
-│       ├── demos/          # Demo booking management
-│       ├── teachers/       # Teacher management (director only)
-│       └── reports/        # Monthly reports with CSV export
-├── hooks/                  # TanStack Query hooks per domain
-├── components/             # RoleGuard, ConfirmDialog, Toast, etc.
-├── lib/                    # API client, query key factories
-└── providers/              # AuthProvider, QueryProvider
-```
+| Name | Instrument | Experience |
+|---|---|---|
+| Mr. Amol Naik | Founder & Director | — |
+| Gopal | Keyboard & Guitar | 12+ years |
+| Jay Nawale | Drums & Percussion | 8+ years |
+| Mrs. Manisha | Vocals | 10+ years |
+
+---
+
+*Amuzic Store & Music Academy · Bakaji Corner, Bavdhan, Pune 411021 · +91 89759 16381*
