@@ -12,17 +12,19 @@ import {
   getStudentAttendance,
   getStudentFees,
   getStudentProgress,
+  getStudentFeeSummary,
 } from '../controllers/students.controller.js'
 
 const router: IRouter = Router()
 
 router.get('/', authenticate, requireRole('director', 'teacher'), getStudents)
-router.post('/', authenticate, requireRole('director', 'teacher'), validate(CreateStudentSchema), createStudent)
+router.post('/', authenticate, requireRole('director'), validate(CreateStudentSchema), createStudent)
 router.get('/:id', authenticate, requireRole('director', 'teacher'), getStudent)
-router.patch('/:id', authenticate, requireRole('director', 'teacher'), validate(UpdateStudentSchema), updateStudent)
+router.patch('/:id', authenticate, requireRole('director'), validate(UpdateStudentSchema), updateStudent)
 router.delete('/:id', authenticate, requireRole('director'), deleteStudent)
 router.get('/:id/attendance', authenticate, requireRole('director', 'teacher'), getStudentAttendance)
 router.get('/:id/fees', authenticate, requireRole('director', 'teacher'), getStudentFees)
 router.get('/:id/progress', authenticate, requireRole('director', 'teacher'), getStudentProgress)
+router.get('/:id/fee-summary', authenticate, requireRole('director', 'teacher'), getStudentFeeSummary)
 
 export default router

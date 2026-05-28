@@ -83,13 +83,51 @@ export async function getStudents(req: Request, res: Response, next: NextFunctio
 export async function createStudent(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const supabase = createSupabaseClient()
+    const { send_portal_invite, batch_id, ...studentBody } = req.body as Record<string, unknown>
+
+    let profileId: string | undefined
+
+    if (send_portal_invite && studentBody['email']) {
+      const email = studentBody['email'] as string
+      const full_name = studentBody['full_name'] as string
+
+      const { data: authData, error: authError } = await supabase.auth.admin.inviteUserByEmail(email, {
+        data: { full_name, role: 'student' },
+      })
+      if (authError) { next(authError); return }
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({ id: authData.user.id, email, full_name, role: 'student', is_active: true })
+      if (profileError) {
+        await supabase.auth.admin.deleteUser(authData.user.id)
+        next(profileError); return
+      }
+
+      profileId = authData.user.id
+    }
+
     const { data, error } = await supabase
       .from('students')
-      .insert({ ...req.body, enrollment_date: new Date().toISOString().split('T')[0] })
+      .insert({
+        ...studentBody,
+        enrollment_date: new Date().toISOString().split('T')[0],
+        ...(profileId ? { profile_id: profileId } : {}),
+      })
       .select()
       .single()
     if (error) return next(error)
-    res.status(201).json({ data })
+
+    if (batch_id && data) {
+      const { error: enrollError } = await supabase
+        .from('batch_enrollments')
+        .insert({ batch_id, student_id: data.id, status: 'active' })
+      if (enrollError) {
+        console.error('[createStudent] batch enrollment failed:', enrollError.message)
+      }
+    }
+
+    res.status(201).json({ data, invite_sent: !!profileId })
   } catch (err) {
     next(err)
   }
@@ -205,6 +243,48 @@ export async function getStudentProgress(req: Request, res: Response, next: Next
       .order('class_date', { ascending: false })
     if (error) return next(error)
     res.json({ notes: data ?? [] })
+  } catch (err) {
+    next(err)
+  }
+}
+
+export async function getStudentFeeSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const supabase = createSupabaseClient()
+    const { data: fees, error } = await supabase
+      .from('fee_records')
+      .select('*')
+      .eq('student_id', req.params['id']!)
+      .order('due_date', { ascending: false })
+    if (error) return next(error)
+
+    const thisYear = new Date().getFullYear()
+    const feesThisYear = (fees ?? []).filter((f) => f.due_date?.startsWith(String(thisYear)))
+
+    const total_billed = feesThisYear.reduce((s, f) => s + f.amount, 0)
+    const total_paid = (fees ?? []).filter((f) => f.status === 'paid').reduce((s, f) => s + (f.paid_amount ?? f.amount), 0)
+    const outstanding = (fees ?? []).filter((f) => f.status === 'pending' || f.status === 'overdue').reduce((s, f) => s + f.amount, 0)
+
+    const nextDueFee = (fees ?? [])
+      .filter((f) => f.status === 'pending' || f.status === 'overdue')
+      .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())[0]
+
+    const next_due = nextDueFee
+      ? { amount: nextDueFee.amount, due_date: nextDueFee.due_date, month_year: nextDueFee.month_year ?? null }
+      : null
+
+    const payment_history = (fees ?? [])
+      .filter((f) => f.status === 'paid' && f.paid_date)
+      .map((f) => ({
+        paid_date: f.paid_date,
+        paid_amount: f.paid_amount ?? f.amount,
+        payment_mode: f.payment_mode,
+        fee_type: f.fee_type,
+        month_year: f.month_year,
+      }))
+      .sort((a, b) => new Date(b.paid_date!).getTime() - new Date(a.paid_date!).getTime())
+
+    res.json({ total_billed, total_paid, outstanding, next_due, payment_history })
   } catch (err) {
     next(err)
   }

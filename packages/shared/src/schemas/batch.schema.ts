@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const CreateBatchSchema = z.object({
   name: z.string().min(2).max(100),
   course_id: z.string().uuid(),
-  teacher_id: z.string().uuid().optional(),
+  teacher_id: z.union([z.string().uuid(), z.literal('')]).optional().transform((v) => v === '' ? undefined : v),
   schedule_days: z
     .array(z.enum(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']))
     .min(1),

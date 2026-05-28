@@ -11,6 +11,8 @@ export const CreateStudentSchema = z.object({
   guardian_phone: z.string().optional(),
   student_type: z.enum(['child', 'adult', 'senior']),
   notes: z.string().optional(),
+  send_portal_invite: z.boolean().optional(),
+  batch_id: z.string().uuid().optional().or(z.literal('')),
 })
 
 export const UpdateStudentSchema = CreateStudentSchema.partial()

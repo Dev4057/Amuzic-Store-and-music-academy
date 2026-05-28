@@ -1,12 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useState } from 'react'
 import { Menu, X } from 'lucide-react'
 
 const NAV_LINKS = [
   { href: '/courses', label: 'Courses' },
   { href: '/why-music', label: 'Why Music?' },
+  { href: '/insights', label: 'Insights' },
   { href: '/showcase', label: 'Showcase' },
   { href: '/store', label: 'Store' },
   { href: '/about', label: 'About' },
@@ -20,9 +22,10 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 bg-cream/95 backdrop-blur-sm border-b border-ink/8">
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-16">
         <div className="flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-0.5">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Image src="/logo.jpeg" alt="Amuzic logo" width={36} height={36} className="rounded-sm object-contain" />
             <span className="font-heading text-xl font-semibold text-ink">Amuzic</span>
-            <span className="font-heading text-xl italic text-burgundy"> Store & Academy</span>
+            <span className="font-heading text-xl italic text-burgundy">Store & Music Academy</span>
           </Link>
 
           {/* Desktop nav */}

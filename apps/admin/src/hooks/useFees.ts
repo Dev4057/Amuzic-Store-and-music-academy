@@ -44,7 +44,10 @@ export function useCreateFee() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: Partial<FeeRecord>) => api.post<{ data: FeeRecord }>('/api/fees', body, accessToken!),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: queryKeys.fees.all }) },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.fees.all })
+      void qc.invalidateQueries({ queryKey: queryKeys.financials })
+    },
   })
 }
 
@@ -56,8 +59,35 @@ export function useRecordPayment(feeId: string, studentId?: string) {
       api.patch<{ data: FeeRecord }>(`/api/fees/${feeId}/pay`, body, accessToken!),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.fees.all })
+      void qc.invalidateQueries({ queryKey: queryKeys.financials })
       if (studentId) void qc.invalidateQueries({ queryKey: queryKeys.students.fees(studentId) })
     },
+  })
+}
+
+export interface FeeReminder {
+  id: string
+  amount: number
+  due_date: string
+  month_year?: string
+  fee_type: string
+  student_id: string
+  students: { full_name: string; phone: string } | null
+}
+
+export interface FeeRemindersResponse {
+  due_soon: FeeReminder[]
+  missing_this_month: { id: string; full_name: string; phone: string }[]
+  current_month: string
+}
+
+export function useFeeReminders() {
+  const { accessToken } = useAuth()
+  return useQuery({
+    queryKey: queryKeys.fees.reminders,
+    queryFn: () => api.get<FeeRemindersResponse>('/api/fees/reminders', accessToken!),
+    enabled: !!accessToken,
+    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -67,6 +97,9 @@ export function useGenerateMonthlyFees() {
   return useMutation({
     mutationFn: (body: { month_year: string; due_date: string }) =>
       api.post<{ created: number; skipped: number }>('/api/fees/generate-monthly', body, accessToken!),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: queryKeys.fees.all }) },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.fees.all })
+      void qc.invalidateQueries({ queryKey: queryKeys.financials })
+    },
   })
 }

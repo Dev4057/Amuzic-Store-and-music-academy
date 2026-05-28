@@ -12,6 +12,9 @@ import ordersRoutes from './orders.routes.js'
 import showcaseRoutes from './showcase.routes.js'
 import dashboardRoutes from './dashboard.routes.js'
 import reportsRoutes from './reports.routes.js'
+import testimonialsRoutes from './testimonials.routes.js'
+import blogRoutes from './blog.routes.js'
+import financialsRoutes from './financials.routes.js'
 
 const router: IRouter = Router()
 
@@ -28,5 +31,8 @@ router.use('/orders', ordersRoutes)
 router.use('/showcase', showcaseRoutes)
 router.use('/dashboard', dashboardRoutes)
 router.use('/reports', reportsRoutes)
+router.use('/testimonials', testimonialsRoutes)
+router.use('/blog', blogRoutes)
+router.use('/financials', financialsRoutes)
 
 export default router

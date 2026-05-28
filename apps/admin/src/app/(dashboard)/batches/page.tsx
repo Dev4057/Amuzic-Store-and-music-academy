@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useBatches, useCreateBatch } from '../../../hooks/useBatches'
 import { useTeachers } from '../../../hooks/useTeachers'
+import { useCourses } from '../../../hooks/useCourses'
 import { RoleGuard } from '../../../components/RoleGuard'
 import { EmptyState } from '../../../components/EmptyState'
 import { PageHeader } from '../../../components/PageHeader'
@@ -38,30 +39,32 @@ function BatchSheet({ onClose }: BatchFormProps) {
   const createBatch = useCreateBatch()
   const { data: teachersData } = useTeachers()
   const teachers = teachersData?.teachers ?? []
-  const [selectedDays, setSelectedDays] = useState<string[]>([])
+  const { data: coursesData } = useCourses()
+  const courses = coursesData?.data ?? []
+  type Day = typeof DAYS_OF_WEEK[number]
+  const [selectedDays, setSelectedDays] = useState<Day[]>([])
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(CreateBatchSchema),
-    defaultValues: { duration_minutes: 45, max_students: 8 },
+    defaultValues: { duration_minutes: 45, max_students: 8, schedule_days: [] as Day[] },
   })
 
-  function toggleDay(day: string) {
-    setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-    )
+  function toggleDay(day: Day) {
+    setSelectedDays((prev) => {
+      const next = prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+      setValue('schedule_days', next)
+      return next
+    })
   }
 
   async function onSubmit(data: Record<string, unknown>) {
-    if (selectedDays.length === 0) {
-      toast('Select at least one day', 'error')
-      return
-    }
     try {
-      await createBatch.mutateAsync({ ...data, schedule_days: selectedDays })
+      await createBatch.mutateAsync(data)
       toast('Batch created')
       onClose()
-    } catch {
-      toast('Failed to create batch', 'error')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : null
+      toast(msg ?? 'Failed to create batch', 'error')
     }
   }
 
@@ -82,9 +85,14 @@ function BatchSheet({ onClose }: BatchFormProps) {
                 {errors.name && <div className="field-error">{errors.name.message}</div>}
               </div>
               <div className="form-group">
-                <label>Course ID *</label>
-                <input type="text" {...register('course_id')} placeholder="UUID of course" />
-                {errors.course_id && <div className="field-error">Valid course ID required</div>}
+                <label>Course *</label>
+                <select {...register('course_id')}>
+                  <option value="">— Select a course —</option>
+                  {courses.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {errors.course_id && <div className="field-error">Please select a course</div>}
               </div>
               <div className="form-group">
                 <label>Teacher</label>
@@ -109,6 +117,7 @@ function BatchSheet({ onClose }: BatchFormProps) {
                     </label>
                   ))}
                 </div>
+                {errors.schedule_days && <div className="field-error">Select at least one day</div>}
               </div>
               <div className="form-group">
                 <label>Class Time *</label>
@@ -158,7 +167,7 @@ export default function BatchesPage() {
   const batches = data?.batches ?? []
 
   const filtered = courseFilter
-    ? batches.filter((b) => (b.course as { slug?: string } | null)?.slug === courseFilter)
+    ? batches.filter((b) => (b.courses as { slug?: string } | null)?.slug === courseFilter)
     : batches
 
   return (
@@ -210,8 +219,8 @@ export default function BatchesPage() {
       ) : (
         <div className="cards-grid">
           {filtered.map((b) => {
-            const course = b.course as { name: string; slug: string } | null
-            const teacher = b.teacher as { full_name: string } | null
+            const course = b.courses as { name: string; slug: string } | null
+            const teacher = b.teachers as { full_name: string } | null
             const fillPct = b.max_students > 0 ? Math.round((b.enrolled_count / b.max_students) * 100) : 0
             return (
               <div key={b.id} className="batch-card">

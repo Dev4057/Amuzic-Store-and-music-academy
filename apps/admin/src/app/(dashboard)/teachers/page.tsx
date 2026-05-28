@@ -34,8 +34,10 @@ interface TeacherSheetProps {
 function TeacherSheet({ teacher, onClose }: TeacherSheetProps) {
   const { toast } = useToast()
   const createTeacher = useCreateTeacher()
-  const updateTeacher = useUpdateTeacher(teacher?.id ?? '')
+  const updateTeacher = useUpdateTeacher(teacher?.id)
   const [specs, setSpecs] = useState<string[]>(teacher?.specializations ?? [])
+  const [initialPassword, setInitialPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(CreateTeacherSchema),
@@ -55,17 +57,22 @@ function TeacherSheet({ teacher, onClose }: TeacherSheetProps) {
   }
 
   async function onSubmit(data: Record<string, unknown>) {
+    if (!teacher && initialPassword.length < 8) {
+      toast('Initial password must be at least 8 characters', 'error')
+      return
+    }
     try {
       if (teacher) {
         await updateTeacher.mutateAsync({ ...data, specializations: specs })
         toast('Teacher updated')
       } else {
-        await createTeacher.mutateAsync({ ...data, specializations: specs })
-        toast('Teacher added')
+        await createTeacher.mutateAsync({ ...data, specializations: specs, initial_password: initialPassword })
+        toast('Teacher added — share the password with them via WhatsApp or in person')
       }
       onClose()
-    } catch {
-      toast(teacher ? 'Failed to update teacher' : 'Failed to add teacher', 'error')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : null
+      toast(msg ?? (teacher ? 'Failed to update teacher' : 'Failed to add teacher'), 'error')
     }
   }
 
@@ -91,9 +98,33 @@ function TeacherSheet({ teacher, onClose }: TeacherSheetProps) {
                 {errors.phone && <div className="field-error">10-digit Indian number required</div>}
               </div>
               <div className="form-group">
-                <label>Email</label>
+                <label>Email *</label>
                 <input type="email" {...register('email')} placeholder="teacher@amuzic.in" />
+                {errors.email && <div className="field-error">{errors.email.message}</div>}
+                {!teacher && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Used for teacher portal login at /teacher/login</div>}
               </div>
+              {!teacher && (
+                <div className="form-group">
+                  <label>Initial Password *</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={initialPassword}
+                      onChange={(e) => setInitialPassword(e.target.value)}
+                      placeholder="Min. 8 characters"
+                      style={{ paddingRight: 64 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((v) => !v)}
+                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--muted)' }}
+                    >
+                      {showPassword ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>Share this password with the teacher via WhatsApp or in person. They will be asked to change it on first login.</div>
+                </div>
+              )}
               <div className="form-group">
                 <label>Joining Date</label>
                 <input type="date" {...register('joining_date')} />
@@ -132,7 +163,7 @@ export default function TeachersPage() {
   const [editTeacher, setEditTeacher] = useState<TeacherWithStats | undefined>()
   const { toast } = useToast()
   const { data, isLoading } = useTeachers()
-  const toggleActive = useUpdateTeacher('')
+  const toggleActive = useUpdateTeacher()
   const teachers = (data?.teachers ?? []) as TeacherWithStats[]
 
   return (
@@ -202,7 +233,7 @@ export default function TeachersPage() {
                   confirmLabel={t.is_active ? 'Deactivate' : 'Activate'}
                   variant={t.is_active ? 'danger' : 'default'}
                   onConfirm={async () => {
-                    await toggleActive.mutateAsync({ is_active: !t.is_active })
+                    await toggleActive.mutateAsync({ _id: t.id, is_active: !t.is_active })
                     toast(t.is_active ? 'Teacher deactivated' : 'Teacher activated')
                   }}
                   trigger={

@@ -108,9 +108,10 @@ export default function ProductsPage() {
         headers: authHeaders(token),
         body: JSON.stringify(body),
       })
-      const data = await res.json() as { data?: Product; error?: string; message?: string }
+      const data = await res.json() as { data?: Product; error?: string | { message?: string }; message?: string }
       if (!res.ok) {
-        setAddError(data.error ?? data.message ?? 'Failed to add product.')
+        const errMsg = typeof data.error === 'object' ? (data.error?.message ?? 'Failed to add product.') : (data.error ?? data.message ?? 'Failed to add product.')
+        setAddError(errMsg)
         return
       }
       setAddSuccess(true)
@@ -151,8 +152,9 @@ export default function ProductsPage() {
         body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const data = await res.json() as { error?: string }
-        setEditError(data.error ?? 'Update failed.')
+        const data = await res.json() as { error?: string | { message?: string } }
+        const editErrMsg = typeof data.error === 'object' ? (data.error?.message ?? 'Update failed.') : (data.error ?? 'Update failed.')
+        setEditError(editErrMsg)
         return
       }
       setEditId(null)

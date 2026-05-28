@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useBatch, useMarkAttendance, useEnrollStudent, useUnenrollStudent } from '../../../../hooks/useBatches'
+import { useBatch, useMarkAttendance, useEnrollStudent, useUnenrollStudent, useBatchAttendance } from '../../../../hooks/useBatches'
+import { useStudents } from '../../../../hooks/useStudents'
 import { RoleGuard } from '../../../../components/RoleGuard'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog'
 import { useToast } from '../../../../components/Toast'
@@ -43,6 +44,9 @@ export default function BatchDetailPage() {
   const markAttendance = useMarkAttendance(id)
   const enrollStudent = useEnrollStudent(id)
   const unenrollStudent = useUnenrollStudent(id)
+  const { data: allStudentsData } = useStudents({ status: 'active' })
+
+  const { data: attendanceData, isLoading: isAttLoading } = useBatchAttendance(id, attDate)
 
   const batch = batchData?.data
   const course = batch?.course as { name: string; slug: string } | null
@@ -51,6 +55,12 @@ export default function BatchDetailPage() {
 
   function setStatus(studentId: string, status: string) {
     setAttMap((prev) => ({ ...prev, [studentId]: status }))
+  }
+
+  const getStatus = (studentId: string) => {
+    if (attMap[studentId]) return attMap[studentId]
+    const existing = (attendanceData?.attendance ?? []).find((a: any) => a.student_id === studentId)
+    return existing ? existing.status : undefined
   }
 
   async function handleMarkAll(status: string) {
@@ -91,14 +101,22 @@ export default function BatchDetailPage() {
     <>
       <div style={{ marginBottom: 24 }}>
         <Link href="/batches" style={{ fontSize: 13, color: 'var(--muted)', textDecoration: 'none' }}>← Batches</Link>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 12 }}>
           <div>
-            <h1 className="page-title" style={{ margin: 0 }}>{batch.name}</h1>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-              {course?.name} · {teacher?.full_name ?? 'Unassigned'} · {batch.schedule_days?.join(', ')} at {batch.schedule_time}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+              <h1 className="page-title" style={{ margin: 0 }}>{batch.name}</h1>
+              {course && (
+                <span className="badge badge-blue" style={{ fontSize: 12 }}>
+                  {course.name}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+              <strong>Teacher:</strong> {teacher?.full_name ?? 'Unassigned'} &nbsp;·&nbsp;
+              {batch.schedule_days?.join(', ')} at {batch.schedule_time}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <span className="badge badge-gray">{batch.duration_minutes} min</span>
             <span className={`badge ${batch.status === 'active' ? 'badge-green' : 'badge-gray'}`}>{batch.status}</span>
           </div>
@@ -116,15 +134,20 @@ export default function BatchDetailPage() {
       {/* Students tab */}
       {tab === 'students' && (
         <div>
-          <RoleGuard allowedRoles={['director', 'teacher']}>
+          <RoleGuard allowedRoles={['director']}>
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <input
-                type="text"
-                placeholder="Student ID to enroll"
+              <select
                 value={enrollId}
                 onChange={(e) => setEnrollId(e.target.value)}
-                style={{ width: 240 }}
-              />
+                style={{ width: 260 }}
+              >
+                <option value="">— Select a student —</option>
+                {(allStudentsData?.students ?? [])
+                  .filter((s) => !students.some((e) => e.students?.id === s.id))
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>{s.full_name} — {s.phone}</option>
+                  ))}
+              </select>
               <button
                 className="btn btn-primary btn-sm"
                 onClick={async () => {
@@ -196,60 +219,46 @@ export default function BatchDetailPage() {
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 20 }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label>Date</label>
-              <input type="date" value={attDate} onChange={(e) => setAttDate(e.target.value)} style={{ width: 180 }} />
+              <input type="date" value={attDate} onChange={(e) => setAttDate(e.target.value)} style={{ width: 180 }} max={new Date().toISOString().split('T')[0]} />
             </div>
-            <button className="btn btn-ghost btn-sm" style={{ marginTop: 20 }} onClick={() => handleMarkAll('present')}>
-              Mark All Present
-            </button>
+            <div style={{ marginTop: 20 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => handleMarkAll('present')}>All Present</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => handleMarkAll('absent')}>All Absent</button>
+            </div>
           </div>
 
-          {students.length === 0 ? (
-            <div className="card">
-              <div className="empty-state">
-                <div className="empty-state-icon">✓</div>
-                <div className="empty-state-title">No students to mark</div>
-              </div>
-            </div>
-          ) : (
-            <div className="card">
-              <div className="table-wrapper">
-                <table>
-                  <thead>
-                    <tr><th>Student</th><th>Status</th></tr>
-                  </thead>
-                  <tbody>
-                    {students.map((e) => e.students && (
-                      <tr key={e.id}>
-                        <td style={{ fontWeight: 600 }}>{e.students.full_name}</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            {(['present', 'absent', 'late', 'cancelled'] as const).map((s) => (
-                              <button
-                                key={s}
-                                className={`att-btn att-btn-${s}${attMap[e.students!.id] === s ? ' active' : ''}`}
-                                onClick={() => setStatus(e.students!.id, s)}
-                              >
-                                {s.charAt(0).toUpperCase() + s.slice(1)}
-                              </button>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => { void handleSubmitAttendance() }}
-                  disabled={markAttendance.isPending}
-                >
-                  {markAttendance.isPending ? 'Saving…' : `Save Attendance for ${formatDate(attDate)}`}
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Student</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {students.map((e) => e.students && (
+                  <tr key={e.id}>
+                    <td style={{ fontWeight: 600 }}>{e.students.full_name}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {(['present', 'absent', 'late', 'cancelled'] as const).map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className={`att-btn att-btn-${s}${getStatus(e.students!.id) === s ? ' active' : ''}`}
+                            onClick={() => setStatus(e.students!.id, s)}
+                          >
+                            {s.charAt(0).toUpperCase() + s.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+            <button className="btn btn-primary" onClick={handleSubmitAttendance}>Save Attendance</button>
+          </div>
         </div>
       )}
     </>

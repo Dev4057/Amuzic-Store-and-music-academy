@@ -18,6 +18,14 @@ const TEACHERS = [
     bio: 'Jay brings the energy of real live performance to every lesson. He has played with local bands across Pune, teaching students not just how to drum — but how to hold the beat that everyone else leans on.',
     specializations: ['Rock Drumming', 'Jazz Percussion', 'Groove & Fills', 'Sight Reading'],
   },
+  {
+    name: 'Mrs. Manisha',
+    initials: 'M',
+    role: 'Vocals',
+    experience: '10+ years',
+    bio: 'Mrs. Manisha brings warmth and precision to every vocal lesson. Her training spans classical and contemporary styles, and her patient, nurturing approach has helped students of all ages find their voice and build genuine confidence.',
+    specializations: ['Classical Vocals', 'Bollywood Singing', 'Breath & Tone', 'Beginners'],
+  },
 ]
 
 export default function TeachersSection() {
@@ -30,7 +38,7 @@ export default function TeachersSection() {
           <h2 className="section-title">Meet Your<br />Teachers</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {TEACHERS.map((teacher) => (
             <div
               key={teacher.name}

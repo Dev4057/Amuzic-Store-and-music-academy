@@ -1,10 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -23,7 +21,7 @@ export default function LoginPage() {
       })
       const data = await res.json() as {
         session?: { access_token: string }
-        user?: { id: string; role: string; full_name: string; email: string }
+        user?: { id: string; role: string; full_name: string; email: string; must_change_password?: boolean }
         error?: string | { message?: string }
       }
 
@@ -44,11 +42,15 @@ export default function LoginPage() {
         full_name: data.user.full_name,
         role: data.user.role,
         email: data.user.email,
+        must_change_password: data.user.must_change_password ?? false,
       }))
-      // Set cookie for middleware protection
       document.cookie = `admin_auth=1; path=/; max-age=${60 * 60 * 24 * 7}`
 
-      router.push(data.user.role === 'director' ? '/dashboard' : '/students')
+      if (data.user.must_change_password) {
+        window.location.href = '/change-password'
+      } else {
+        window.location.href = data.user.role === 'director' ? '/dashboard' : '/students'
+      }
     } catch {
       setError('Could not connect to the server. Make sure the API is running.')
     } finally {

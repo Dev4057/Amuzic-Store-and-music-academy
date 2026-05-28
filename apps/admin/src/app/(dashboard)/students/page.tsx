@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useStudents, useCreateStudent, useUpdateStudent, useDeleteStudent } from '../../../hooks/useStudents'
+import { useBatches, useEnrollStudent } from '../../../hooks/useBatches'
 import { RoleGuard } from '../../../components/RoleGuard'
 import { ConfirmDialog } from '../../../components/ConfirmDialog'
 import { EmptyState } from '../../../components/EmptyState'
@@ -54,6 +55,10 @@ function StudentSheet({ student, onClose, onSaved }: StudentSheetProps) {
   const { toast } = useToast()
   const createStudent = useCreateStudent()
   const updateStudent = useUpdateStudent(student?.id ?? '')
+  const [sendInvite, setSendInvite] = useState(false)
+  const [selectedBatchId, setSelectedBatchId] = useState('')
+  const { data: batchesData } = useBatches({ status: 'active' })
+  const enrollInBatch = useEnrollStudent(selectedBatchId)
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<CreateStudentInput>({
     resolver: zodResolver(CreateStudentSchema),
@@ -87,10 +92,18 @@ function StudentSheet({ student, onClose, onSaved }: StudentSheetProps) {
     try {
       if (student) {
         await updateStudent.mutateAsync(data)
+        if (selectedBatchId) {
+          await enrollInBatch.mutateAsync(student.id)
+        }
         toast('Student updated successfully')
       } else {
-        await createStudent.mutateAsync(data)
-        toast('Student added successfully')
+        const result = await createStudent.mutateAsync({
+          ...data,
+          ...(sendInvite && data.email ? { send_portal_invite: true } : {}),
+          ...(selectedBatchId ? { batch_id: selectedBatchId } : {}),
+        })
+        const inviteSent = (result as { invite_sent?: boolean }).invite_sent
+        toast(inviteSent ? 'Student added — invite email sent!' : 'Student added successfully')
       }
       onSaved()
       onClose()
@@ -99,7 +112,7 @@ function StudentSheet({ student, onClose, onSaved }: StudentSheetProps) {
     }
   }
 
-  const isSaving = createStudent.isPending || updateStudent.isPending
+  const isSaving = createStudent.isPending || updateStudent.isPending || enrollInBatch.isPending
 
   return (
     <>
@@ -170,6 +183,52 @@ function StudentSheet({ student, onClose, onSaved }: StudentSheetProps) {
                 <label>Notes</label>
                 <textarea {...register('notes')} rows={2} placeholder="Any notes about this student" style={{ resize: 'vertical' }} />
               </div>
+              <div className="form-group full" style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+                <label>{student ? 'Add to Batch' : 'Enroll in Batch'}</label>
+                {student && student.active_batches?.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, color: 'var(--muted)', alignSelf: 'center' }}>Current:</span>
+                    {student.active_batches.map((name, i) => (
+                      <span key={i} className="badge badge-gray">{name}</span>
+                    ))}
+                  </div>
+                )}
+                <select value={selectedBatchId} onChange={(e) => setSelectedBatchId(e.target.value)}>
+                  <option value="">— Select a batch (optional) —</option>
+                  {(batchesData?.batches ?? []).map((b) => {
+                    const bCourse = (b as unknown as Record<string, unknown>)['courses'] as Record<string, string> | null
+                    const bTeacher = (b as unknown as Record<string, unknown>)['teachers'] as Record<string, string> | null
+                    return (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                        {bCourse ? ` — ${bCourse['name'] ?? ''}` : ''}
+                        {bTeacher ? ` (${bTeacher['full_name'] ?? ''})` : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                  {student
+                    ? 'Selecting a batch will enroll this student immediately when you save.'
+                    : 'Selecting a batch will enroll this student immediately. The assigned teacher will see them right away.'}
+                </div>
+              </div>
+              {!student && watch('email') && (
+                <div style={{ gridColumn: '1 / -1', background: 'rgba(139,46,63,0.04)', border: '1px solid rgba(139,46,63,0.15)', borderRadius: 6, padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    id="send_invite"
+                    checked={sendInvite}
+                    onChange={e => setSendInvite(e.target.checked)}
+                    style={{ marginTop: 2, accentColor: '#8B2E3F', width: 14, height: 14, cursor: 'pointer' }}
+                  />
+                  <label htmlFor="send_invite" style={{ cursor: 'pointer', fontSize: 13, lineHeight: 1.4 }}>
+                    <strong style={{ color: '#2C1810' }}>Send portal invite email</strong>
+                    <br />
+                    <span style={{ color: 'var(--muted)', fontSize: 12 }}>Student will receive a link to set their password and access the student portal.</span>
+                  </label>
+                </div>
+              )}
             </div>
           </div>
           <div className="sheet-footer">
@@ -223,7 +282,7 @@ export default function StudentsPage() {
         title={`Students${total ? ` (${total})` : ''}`}
         description="Manage all enrolled students"
         action={
-          <RoleGuard allowedRoles={['director', 'teacher']}>
+          <RoleGuard allowedRoles={['director']}>
             <button className="btn btn-primary" onClick={() => { setEditStudent(undefined); setShowSheet(true) }}>
               + Add Student
             </button>
@@ -309,7 +368,9 @@ export default function StudentsPage() {
                     <td style={{ fontSize: 13, color: 'var(--muted)' }}>{formatDate(s.enrollment_date)}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(s)}>Edit</button>
+                        <RoleGuard allowedRoles={['director']}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => handleEdit(s)}>Edit</button>
+                        </RoleGuard>
                         <RoleGuard allowedRoles={['director']}>
                           <ConfirmDialog
                             title="Delete Student"

@@ -39,7 +39,7 @@ export function useBatchAttendance(id: string, date: string) {
   const { accessToken } = useAuth()
   return useQuery({
     queryKey: queryKeys.batches.attendance(id, date),
-    queryFn: () => api.get<{ attendance: unknown[] }>(`/api/batches/${id}/attendance?date=${date}`, accessToken!),
+    queryFn: () => api.get<{ attendance: { student_id: string; status: string; notes?: string }[] }>(`/api/batches/${id}/attendance?date=${date}`, accessToken!),
     enabled: !!accessToken && !!id && !!date,
   })
 }

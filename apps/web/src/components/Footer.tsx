@@ -9,7 +9,7 @@ export default function Footer() {
           <div className="md:col-span-1">
             <div className="mb-4">
               <span className="font-heading text-xl font-semibold text-cream">Amuzic</span>
-              <span className="font-heading text-xl italic text-gold"> Store & Academy</span>
+              <span className="font-heading text-xl italic text-gold"> Store & Music Academy</span>
             </div>
             <p className="text-sm leading-relaxed">
               Nurturing musical talent and curating quality instruments in Bavdhan, Pune since 2015. Every person who wants to make music deserves the chance to.
@@ -36,6 +36,7 @@ export default function Footer() {
             <ul className="space-y-3 text-sm">
               {[
                 { href: '/why-music', label: 'Why Music?' },
+                { href: '/insights', label: 'Insights & Blog' },
                 { href: '/showcase', label: 'Student Showcase' },
                 { href: '/store', label: 'Music Store' },
                 { href: '/about', label: 'About Us' },
@@ -76,7 +77,7 @@ export default function Footer() {
         </div>
 
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-cream/25">
-          <p>© {new Date().getFullYear()} Amuzic Store & Music Academy. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Amuzic Store &amp; Music Academy. All rights reserved.</p>
           <p>Bavdhan · Kothrud · Baner · Pashan · Aundh</p>
         </div>
       </div>

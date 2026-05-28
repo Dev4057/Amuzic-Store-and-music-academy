@@ -19,9 +19,10 @@ let _toastId = 0
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
-  const toast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+  const toast = useCallback((message: unknown, type: 'success' | 'error' = 'success') => {
     const id = ++_toastId
-    setToasts((prev) => [...prev, { id, message, type }])
+    const text = typeof message === 'string' ? message : message instanceof Error ? message.message : 'Something went wrong'
+    setToasts((prev) => [...prev, { id, message: text, type }])
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
     }, 3500)

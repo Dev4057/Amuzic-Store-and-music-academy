@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../../../../components/ConfirmDialog'
 import { useToast } from '../../../../components/Toast'
 import { formatCurrency, formatDate } from '@amuzic/shared'
 import type { FeeRecord, ProgressNote, AttendanceStatus } from '@amuzic/shared'
+import { downloadPdf } from '../../../../lib/downloadPdf'
 
 type Tab = 'overview' | 'batches' | 'attendance' | 'fees' | 'progress'
 
@@ -54,6 +55,20 @@ export default function StudentDetailPage() {
   const [noteSkill, setNoteSkill] = useState('')
   const [noteDate, setNoteDate] = useState(new Date().toISOString().split('T')[0]!)
   const [enrollStudentId, setEnrollStudentId] = useState('')
+  const [pdfGenerating, setPdfGenerating] = useState<string | null>(null)
+  const [showAddFeeForm, setShowAddFeeForm] = useState(false)
+  const [feeType, setFeeType] = useState<string>('monthly')
+  const [feeAmount, setFeeAmount] = useState('')
+  const [feeMonthYear, setFeeMonthYear] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [feeDueDate, setFeeDueDate] = useState(() => {
+    const d = new Date()
+    d.setDate(10)
+    return d.toISOString().split('T')[0]!
+  })
+  const [feeNotes, setFeeNotes] = useState('')
 
   const { data: studentData, isLoading } = useStudent(id)
   const { data: attendanceData } = useStudentAttendance(id)
@@ -61,6 +76,7 @@ export default function StudentDetailPage() {
   const { data: progressData, refetch: refetchProgress } = useStudentProgress(id)
 
   const createNote = useCreateProgressNote(id)
+  const createFee = useCreateFee()
   const enrollMutation = useEnrollStudent(id)
 
   const student = studentData?.data
@@ -111,6 +127,28 @@ export default function StudentDetailPage() {
     }
   }
 
+  async function handleAddFee() {
+    if (!feeAmount || Number(feeAmount) <= 0) return
+    try {
+      await createFee.mutateAsync({
+        student_id: id,
+        fee_type: feeType as 'monthly' | 'admission' | 'annual' | 'exam' | 'other',
+        amount: Number(feeAmount),
+        due_date: feeDueDate,
+        month_year: feeType === 'monthly' ? feeMonthYear : undefined,
+        status: 'pending',
+        notes: feeNotes || undefined,
+      })
+      toast('Fee record added')
+      setFeeAmount('')
+      setFeeNotes('')
+      setShowAddFeeForm(false)
+      void refetchFees()
+    } catch {
+      toast('Failed to add fee record', 'error')
+    }
+  }
+
   async function handleAddNote() {
     if (!noteText.trim()) return
     try {
@@ -147,10 +185,58 @@ export default function StudentDetailPage() {
               {student.phone} {student.email ? `· ${student.email}` : ''}
             </div>
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
             <span className={`badge ${student.status === 'active' ? 'badge-green' : student.status === 'inactive' ? 'badge-red' : 'badge-amber'}`}>
               {student.status?.replace('_', ' ')}
             </span>
+            <RoleGuard allowedRoles={['director']}>
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={pdfGenerating === 'report'}
+                onClick={async () => {
+                  const { StudentReportPdf } = await import('../../../../components/pdf/generators/StudentReportPdf')
+                  const { createElement } = await import('react')
+                  const attRows = Object.entries(
+                    (attendanceData?.attendance ?? []).reduce<Record<string, { held: number; present: number; absent: number; late: number }>>((acc, a) => {
+                      const rec = a as { class_date: string; status: string }
+                      const m = new Date(rec.class_date).toLocaleString('en-IN', { month: 'short', year: 'numeric' })
+                      if (!acc[m]) acc[m] = { held: 0, present: 0, absent: 0, late: 0 }
+                      acc[m]!.held++
+                      if (rec.status === 'present') acc[m]!.present++
+                      else if (rec.status === 'absent') acc[m]!.absent++
+                      else if (rec.status === 'late') { acc[m]!.present++; acc[m]!.late++ }
+                      return acc
+                    }, {})
+                  ).map(([month, s]) => ({ month, ...s, rate: s.held > 0 ? Math.round((s.present / s.held) * 100) : 0 }))
+                  const firstBatch = enrollments[0]?.batches
+                  void downloadPdf(
+                    createElement(StudentReportPdf, {
+                      student: {
+                        ...student,
+                        course_name: firstBatch?.courses?.name,
+                        batch_name: firstBatch?.name,
+                        teacher_name: firstBatch?.teachers?.full_name,
+                      },
+                      attendanceSummary: attRows,
+                      fees: fees as FeeRecord[],
+                      progressNotes: progressNotes.map((n) => ({ ...n, teacher_name: n.teachers?.full_name ?? undefined })),
+                      overallAttendanceRate: attSummary?.rate ?? 0,
+                      feeSummary: {
+                        total_billed: fees.reduce((s, f) => s + f.amount, 0),
+                        total_paid: feesData?.summary?.total_paid ?? 0,
+                        outstanding: feesData?.summary?.total_pending ?? 0,
+                      },
+                    }),
+                    `student-report-${student.full_name.replace(/\s+/g, '-')}.pdf`,
+                    () => setPdfGenerating('report'),
+                    () => setPdfGenerating(null),
+                    () => toast('Failed to generate report', 'error'),
+                  )
+                }}
+              >
+                {pdfGenerating === 'report' ? 'Generating…' : '↓ Report'}
+              </button>
+            </RoleGuard>
           </div>
         </div>
       </div>
@@ -323,7 +409,7 @@ export default function StudentDetailPage() {
       {/* Fees */}
       {tab === 'fees' && (
         <div>
-          <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 20 }}>
             <div className="stat-card" style={{ flex: 1 }}>
               <div className="stat-value">{formatCurrency(feesData?.summary?.total_paid ?? 0)}</div>
               <div className="stat-label">Total Paid</div>
@@ -332,7 +418,78 @@ export default function StudentDetailPage() {
               <div className="stat-value" style={{ color: '#DC2626' }}>{formatCurrency(feesData?.summary?.total_pending ?? 0)}</div>
               <div className="stat-label">Pending</div>
             </div>
+            <RoleGuard allowedRoles={['director']}>
+              <button className="btn btn-primary" style={{ marginTop: 4 }} onClick={() => setShowAddFeeForm(!showAddFeeForm)}>
+                + Add Fee
+              </button>
+            </RoleGuard>
           </div>
+
+          {showAddFeeForm && (
+            <div className="form-section" style={{ marginBottom: 20 }}>
+              <div className="form-section-title">New Fee Record</div>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Fee Type *</label>
+                  <select value={feeType} onChange={(e) => setFeeType(e.target.value)}>
+                    <option value="monthly">Monthly</option>
+                    <option value="admission">Admission</option>
+                    <option value="annual">Annual</option>
+                    <option value="exam">Exam</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Amount (₹) *</label>
+                  <input
+                    type="number"
+                    value={feeAmount}
+                    onChange={(e) => setFeeAmount(e.target.value)}
+                    placeholder="e.g. 1500"
+                    min={1}
+                  />
+                </div>
+                {feeType === 'monthly' && (
+                  <div className="form-group">
+                    <label>Month / Year *</label>
+                    <input
+                      type="month"
+                      value={feeMonthYear}
+                      onChange={(e) => setFeeMonthYear(e.target.value)}
+                    />
+                  </div>
+                )}
+                <div className="form-group">
+                  <label>Due Date *</label>
+                  <input
+                    type="date"
+                    value={feeDueDate}
+                    onChange={(e) => setFeeDueDate(e.target.value)}
+                  />
+                </div>
+                <div className="form-group full">
+                  <label>Notes (optional)</label>
+                  <input
+                    type="text"
+                    value={feeNotes}
+                    onChange={(e) => setFeeNotes(e.target.value)}
+                    placeholder="e.g. Revised fee for summer term"
+                  />
+                </div>
+              </div>
+              <div className="form-actions">
+                <button className="btn btn-ghost" onClick={() => setShowAddFeeForm(false)}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => { void handleAddFee() }}
+                  disabled={createFee.isPending || !feeAmount}
+                >
+                  {createFee.isPending ? 'Saving…' : 'Add Fee Record'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="card">
             {fees.length === 0 ? (
               <div className="empty-state">
@@ -354,20 +511,49 @@ export default function StudentDetailPage() {
                         <td style={{ fontSize: 13 }}>{formatDate(f.due_date)}</td>
                         <td><span className={`badge ${statusBadge[f.status] ?? 'badge-gray'}`}>{f.status}</span></td>
                         <td>
-                          {(f.status === 'pending' || f.status === 'overdue') && (
-                            <RoleGuard allowedRoles={['director']}>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {(f.status === 'pending' || f.status === 'overdue') && (
+                              <RoleGuard allowedRoles={['director']}>
+                                <button
+                                  className="btn btn-success btn-sm"
+                                  onClick={() => {
+                                    setPayFeeId(f.id)
+                                    setPayAmount(String(f.amount))
+                                    setShowPayDialog(true)
+                                  }}
+                                >
+                                  Record Payment
+                                </button>
+                              </RoleGuard>
+                            )}
+                            {f.status === 'paid' && (
                               <button
-                                className="btn btn-success btn-sm"
-                                onClick={() => {
-                                  setPayFeeId(f.id)
-                                  setPayAmount(String(f.amount))
-                                  setShowPayDialog(true)
+                                className="btn btn-ghost btn-sm"
+                                disabled={pdfGenerating === f.id}
+                                onClick={async () => {
+                                  const { FeeReceiptPdf } = await import('../../../../components/pdf/generators/FeeReceiptPdf')
+                                  const { createElement } = await import('react')
+                                  const firstBatch = enrollments[0]?.batches
+                                  void downloadPdf(
+                                    createElement(FeeReceiptPdf, {
+                                      student: {
+                                        ...student,
+                                        course_name: firstBatch?.courses?.name,
+                                        batch_name: firstBatch?.name,
+                                      },
+                                      fee: f as FeeRecord,
+                                    }),
+                                    `receipt-${student.full_name.replace(/\s+/g, '-')}-${f.month_year ?? f.id.slice(0, 8)}.pdf`,
+                                    () => setPdfGenerating(f.id),
+                                    () => setPdfGenerating(null),
+                                    () => toast('Failed to generate receipt', 'error'),
+                                  )
                                 }}
                               >
-                                Record Payment
+                                {pdfGenerating === f.id ? '…' : '↓ Receipt'}
                               </button>
-                            </RoleGuard>
-                          )}
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

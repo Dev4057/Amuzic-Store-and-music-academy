@@ -116,6 +116,67 @@ export async function recordPayment(req: Request, res: Response, next: NextFunct
   }
 }
 
+export async function getFeeReminders(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const supabase = createSupabaseClient()
+
+    // Fees due within the next 7 days (still pending or overdue)
+    const in7 = new Date()
+    in7.setDate(in7.getDate() + 7)
+    const in7str = in7.toISOString().split('T')[0]!
+
+    const { data: dueSoon, error: e1 } = await supabase
+      .from('fee_records')
+      .select('id, amount, due_date, month_year, fee_type, student_id, students(full_name, phone)')
+      .in('status', ['pending', 'overdue'])
+      .lte('due_date', in7str)
+      .order('due_date', { ascending: true })
+      .limit(20)
+
+    if (e1) return next(e1)
+
+    // Active enrolled students who have no fee record for the current month
+    const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
+
+    const { data: enrollments, error: e2 } = await supabase
+      .from('batch_enrollments')
+      .select('student_id, students(id, full_name, phone)')
+      .eq('status', 'active')
+
+    if (e2) return next(e2)
+
+    const enrolledIds = [...new Set((enrollments ?? []).map((e) => e.student_id))]
+
+    let missingStudents: { id: string; full_name: string; phone: string }[] = []
+
+    if (enrolledIds.length > 0) {
+      const { data: hasFee } = await supabase
+        .from('fee_records')
+        .select('student_id')
+        .eq('month_year', currentMonth)
+        .eq('fee_type', 'monthly')
+        .in('student_id', enrolledIds)
+
+      const withFeeIds = new Set((hasFee ?? []).map((r) => r.student_id))
+
+      const seen = new Set<string>()
+      missingStudents = (enrollments ?? [])
+        .filter((e) => !withFeeIds.has(e.student_id))
+        .map((e) => e.students as unknown as { id: string; full_name: string; phone: string } | null)
+        .filter((s): s is { id: string; full_name: string; phone: string } => !!s)
+        .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
+    }
+
+    res.json({
+      due_soon: dueSoon ?? [],
+      missing_this_month: missingStudents,
+      current_month: currentMonth,
+    })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function generateMonthlyFees(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const supabase = createSupabaseClient()

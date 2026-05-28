@@ -8,6 +8,7 @@ interface AuthUser {
   full_name: string
   role: UserRole
   email: string
+  must_change_password?: boolean
 }
 
 interface AuthContextValue {

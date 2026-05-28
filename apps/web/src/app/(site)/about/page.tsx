@@ -98,7 +98,7 @@ export default function AboutPage() {
             The Faculty
           </p>
           <h2 className="font-heading text-4xl font-semibold text-cream mb-12">Our Teaching Team</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl">
             {[
               {
                 name: 'Gopal',
@@ -115,6 +115,14 @@ export default function AboutPage() {
                 experience: '8+ years',
                 bio: 'Jay brings the energy and authenticity of real live performance to every lesson. He has played with local bands across Pune and brings that experience into the classroom — teaching students not just how to drum, but how to play with others, listen, and hold the beat that everyone else leans on.',
                 specializations: ['Rock Drumming', 'Jazz Percussion', 'Bollywood Rhythms', 'Ensemble Playing', 'Advanced Students'],
+              },
+              {
+                name: 'Mrs. Manisha',
+                initials: 'M',
+                role: 'Vocals',
+                experience: '10+ years',
+                bio: 'Mrs. Manisha brings warmth and precision to every vocal lesson. Her training spans classical and contemporary styles, and her patient, nurturing approach has helped students of all ages find their voice and build genuine confidence.',
+                specializations: ['Classical Vocals', 'Bollywood Singing', 'Breath & Tone', 'Beginners'],
               },
             ].map((teacher) => (
               <div key={teacher.name} className="border border-cream/10 rounded-sm p-8 hover:border-cream/20 transition-colors">

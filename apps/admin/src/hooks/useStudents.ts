@@ -74,8 +74,12 @@ export function useCreateStudent() {
   const { accessToken } = useAuth()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: Partial<Student>) => api.post<{ data: Student }>('/api/students', body, accessToken!),
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: queryKeys.students.all }) },
+    mutationFn: (body: Partial<Student> & { send_portal_invite?: boolean; batch_id?: string }) =>
+      api.post<{ data: Student; invite_sent?: boolean }>('/api/students', body, accessToken!),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.students.all })
+      void qc.invalidateQueries({ queryKey: queryKeys.batches.all })
+    },
   })
 }
 
